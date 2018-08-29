@@ -29,6 +29,8 @@ vector<Point2f> DetectedObjects(Mat input);
 Mat findingContours(Mat input);
 int addfiles(string dir, vector<string> &files);
 Mat sobelFilter(Mat input);
+Point2f colorDetection(Mat input);
+Point2f coord;
 
 
 main(int argc, char** argv){
@@ -44,9 +46,11 @@ main(int argc, char** argv){
     dir = argv[1];
   }
   vector<Mat> originalIms;                  //Mat vector to store the images
-  vector<Mat> segIms;                     //Mat vector to store segmented images
+  vector<Mat> perf;                     //Mat vector to store segmented images
   vector<string> files = vector<string>(); //Vector where the files' names are kept
+  vector<Point2f> coordinates;
   addfiles(dir,files);
+  Mat outp;
 
   //Obtaining Mat array with the original images
   for(int i = 0; i<files.size();i++){
@@ -64,18 +68,30 @@ main(int argc, char** argv){
 
     //Histogram obtained after CLAHE equalization
     //HistogramMap(claheEquaIm).copyTo(EqHistogram);
-
     //sobelFilter(claheEquaIm).copyTo(sobelFiltIm);
-
-    adaptiveThreshold(claheEquaIm).copyTo(adapThresholdIm);
-    //Applying median blur after adaptive thresholding to remove black and white small noise
-    //medianBlurFilter(adapThresholdIm).copyTo(medianBlurIm);
-    //Opening operation to remove additional noise
-    //erosionOperation(medianBlurIm).copyTo(erodeIm);
-    //dilationOperation(erodeIm).copyTo(dilateIm);
+    //adaptiveThreshold(claheEquaIm).copyTo(adapThresholdIm);
 
 
-    }
+    coord = colorDetection(claheEquaIm);
+  /*  for(int i=coord.x-50;i<coord.x+50;i++){
+      for(int j=coord.y-50;i<coord.y+50;j++){
+        Vec3b color = image.at<Vec3b>(Point(i,j));
+        image.at<Vec3b>(Point(i,j)) = color;
+
+        //claheEquaIm.at<Vec3b>(j,i)=Vec3b(Point(0,0,255));
+      }
+
+    }*/
+
+
+    imshow("Coordinates", claheEquaIm); //show the thresholded image
+    waitKey();
+    destroyWindow("Coordinates");
+    //Mat imgLines = Mat::zeros(input.size(), CV_8UC3);
+
+
+  }
+
 
   return 0;
 }
@@ -115,7 +131,7 @@ Mat claheEqualization(Mat input){
   output.copyTo(sections[0]);
   merge(sections,labImage);
   cv::cvtColor(labImage, equalizedIm, CV_Lab2BGR);
-  cv::cvtColor(equalizedIm, equalizedIm, CV_BGR2GRAY);
+  //cv::cvtColor(equalizedIm, equalizedIm, CV_BGR2HSV);
   namedWindow("CLAHEqualized Image", WINDOW_AUTOSIZE);
   imshow("CLAHEqualized Image",equalizedIm);
   waitKey();
@@ -181,15 +197,19 @@ Mat sobelFilter(Mat input){
 
 Point2f colorDetection(Mat input){
   Mat output;
-  int LowH, HighH, LowS, HighS, LowV, HighV;
-  Mat imgHSV, imgThreshold;
+  int LowB, HighB, LowG, HighG, LowR, HighR;
+  LowB, LowG = 0;
+  HighB = 190;
+  HighG = 155;
+  LowR = 92;
+  HighR = 255;
+  Mat imgThreshold;
   int iLastX = -1;
   int iLastY = -1;
-  Mat imgLines = Mat::zeros(input.size(), CV_8UC3 );
+  Mat imgLines = Mat::zeros(input.size(), CV_8UC3);
   Point2f finalPos;
 
-  cvtColor(input,imgHSV,COLOR_BGR2HSV);
-  inRange(imgHSV,Scalar(LowH,LowS,LowV),Scalar(HighH,HighS,HighV),imgThreshold);
+  inRange(input,Scalar(LowB,LowG,LowR),Scalar(HighB,HighG,HighR),imgThreshold);
 
   //morphological opening (removes small objects from the foreground)
   erode(imgThreshold, imgThreshold, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)) );
@@ -201,23 +221,20 @@ Point2f colorDetection(Mat input){
 
   //Calculate the moments of the thresholded image
   Moments oMoments = moments(imgThreshold);
-
   double dM01 = oMoments.m01;
   double dM10 = oMoments.m10;
   double dArea = oMoments.m00;
-
-    // if the area <= 10000, I consider that there are no object in the image and it's because of the noise, the area is not zero
-
-    //************HACER PRUEBAS CON LA BANDERA CON LA DISTANCIA DE 13 METROS*************
+  // if the area <= 10000, I consider that there are no object in the image and it's because of the noise, the area is not zero
+  //************HACER PRUEBAS CON LA BANDERA CON LA DISTANCIA DE 13 METROS*************
   if (dArea > 10000)
   {
     //calculate the position of the ball
     finalPos.x = dM10 / dArea;
     finalPos.y = dM01 / dArea;
   }
-
-  imshow("Thresholded Image", imgThresholded); //show the thresholded image
-  waitKey(30);
+  imshow("Thresholded Image", imgThreshold); //show the thresholded image
+  waitKey();
+  cout << finalPos.x << ", " << finalPos.y << endl;
   return finalPos;
 }
 
@@ -236,33 +253,5 @@ Mat medianBlurFilter(Mat input){
   imshow("median Blur", output);
   waitKey();
   destroyWindow("median Blur");
-  return output;
-}
-Mat erosionOperation(Mat input){  //add //a little bit more useful //darkens
-  Mat output;
-  float erosion_size=1.78;
-  Mat element = getStructuringElement(cv::MORPH_CROSS, cv::Size(2*(erosion_size + 0.3), 2*(erosion_size + 0.3)), cv::Point(erosion_size, erosion_size));
-  erode(input,output, element);
-  namedWindow("Erosion result", WINDOW_AUTOSIZE);
-  imshow("Erosion result", output);
-  waitKey();
-  destroyWindow("Erosion result");
-  return output;
-}
-Mat dilationOperation(Mat input){ //substract  //not useful in these case //brightens
-  Mat output;
-  float dilation_size=0.938;
-  Mat element = getStructuringElement(cv::MORPH_CROSS, cv::Size(2*dilation_size - 0.3,2*dilation_size - 0.3), cv::Point(dilation_size, dilation_size));
-  dilate(input,output, element);
-  Mat kernel = (Mat_<float>(3,3) << 1,1,1,1,-8,1,1,1,1); //approximation of second derivative
-  Mat LaplacianIm, resultIm;
-  Mat edgeIm = output;
-  filter2D(edgeIm,LaplacianIm,CV_32F,kernel);
-  cv::subtract(edgeIm, LaplacianIm, output, Mat(), CV_32F);
-  output.convertTo(output,CV_8UC1);
-  namedWindow("Dilation result", WINDOW_AUTOSIZE);
-  imshow("Dilation result", output);
-  waitKey();
-  destroyWindow("Dilation result");
   return output;
 }
