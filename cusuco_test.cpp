@@ -38,6 +38,7 @@ int addfiles(string dir, vector<string> &files);
 Mat sobelFilter(Mat input);
 Point2f colorDetection(Mat input);
 Point2f coord;
+<<<<<<< HEAD
 
 #define PI 3.141592653589
 
@@ -49,9 +50,41 @@ cv_bridge::CvImagePtr cv_ptr_display;
 
 //namespace enc = sensor_msgs::image_encodings;
 int contadorDeImagenesRecibidas=0;
+=======
+float angle(float distance);
+>>>>>>> 0df9ff9d2f9a2ff03122af899f83db18eb9c3ea2
 
+#define PI 3.141592653589
 
 main(int argc, char** argv){
+<<<<<<< HEAD
+=======
+  Mat originalHistogram, EqHistogram; //Histograms of readImage and after equalization
+  Mat claheEquaIm;         //Original and equalized images
+  Mat expoIm, bilatFilterIm, LogFilterIm, dilateIm, erodeIm, medianBlurIm; //mat objects for applied filters
+  Mat adapThresholdIm;             //thresholding techniques applied
+  Mat PatternIm, adapContoursIm; //mat objects for identification in images
+  Mat sobelFiltIm;
+  float center = 640;
+  float result;
+  //Reading images' directory and its content
+  string dir;
+  if(argc > 1){
+    dir = argv[1];
+  }
+  vector<Mat> originalIms;                  //Mat vector to store the images
+  vector<Mat> perf;                     //Mat vector to store segmented images
+  vector<string> files = vector<string>(); //Vector where the files' names are kept
+  vector<Point2f> coordinates;
+  addfiles(dir,files);
+
+  //Obtaining Mat array with the original images
+  for(int i = 0; i<files.size();i++){
+    //show images' paths, read them all and get them into a Mat vector
+    //push_back adds new elements at the end of the vector
+    originalIms.push_back(imread(files[i], IMREAD_COLOR));
+  }
+>>>>>>> 0df9ff9d2f9a2ff03122af899f83db18eb9c3ea2
 
     //Levantando del nodo ROS llamado "image_segmentation_node".
     ros::init(argc, argv, "image_segmentation_node");
@@ -111,6 +144,7 @@ void FunctionToHandlePublishedImage(const sensor_msgs::ImageConstPtr& msg){
       cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
 	  //cv_ptr =toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
 
+<<<<<<< HEAD
       //cv_prt_display es una copia de cv_prt. Esta copia
       //se usará únicamente para visualización
       cv_ptr_display = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
@@ -139,10 +173,40 @@ void FunctionToHandlePublishedImage(const sensor_msgs::ImageConstPtr& msg){
       //Object to the left
       result = abs(result);
       result = angle(result)*-1;        //angle the car should move to the left
+=======
+    //Histogram obtained after CLAHE equalization
+    //HistogramMap(claheEquaIm).copyTo(EqHistogram);
+    //sobelFilter(claheEquaIm).copyTo(sobelFiltIm);
+    //adaptiveThreshold(claheEquaIm).copyTo(adapThresholdIm);
+
+
+    coord = colorDetection(claheEquaIm);
+    /*for(int i=coord.x-50;i<coord.x+50;i++){
+        for(int j=coord.y-50;i<coord.y+50;j++){
+          Vec3b color = image.at<Vec3b>(Point(i,j));
+          image.at<Vec3b>(Point(i,j)) = color;
+          //claheEquaIm.at<Vec3b>(j,i)=Vec3b(Point(0,0,255));
+        }
+    }*/
+
+    //Comparacion de coordenada x con posicion del centro
+    result = coord.x - center;
+    if(result > 0){
+      //Object to the right
+      result = abs(result);           //distance the car should move to one side or the other
+      result = angle(result);         //angle the car should move to the right
+      //Send message to move left motor RESULT angles to move to the right
+
+    }else if(result < 0){
+      //Object to the left
+      result = abs(result);
+      result = angle(result);        //angle the car should move to the left
+>>>>>>> 0df9ff9d2f9a2ff03122af899f83db18eb9c3ea2
       //Send message to move right motor RESULT angles to move to the left
     }else{                          //Object = Result
       //Send message to keep moving with both motors working ======> Envia 0,0 (cero de direccion, cero de angulo)
     }
+<<<<<<< HEAD
     	imshow("Coordinates", claheEquaIm); //show the thresholded image
     	waitKey();
     	destroyWindow("Coordinates");
@@ -162,6 +226,18 @@ void FunctionToHandlePublishedImage(const sensor_msgs::ImageConstPtr& msg){
 }
 
 
+=======
+    imshow("Coordinates", claheEquaIm); //show the thresholded image
+    waitKey();
+    destroyWindow("Coordinates");
+
+  }
+  return 0;
+}
+
+
+
+>>>>>>> 0df9ff9d2f9a2ff03122af899f83db18eb9c3ea2
 //Function for directory reading and image retreiving
 int addfiles(string dir, vector<string> &files){   //receives the directory and a vector the dir's files
   DIR *directory;           //directory stream
@@ -301,11 +377,14 @@ Point2f colorDetection(Mat input){
     finalPos.x = dM10 / dArea;
     finalPos.y = dM01 / dArea;
   }
+<<<<<<< HEAD
 
   if(finalPos.x == 0 && finalPos.y == 0){
         //Manda msj de 'NO ENCUENTRA BANDERA': gira cada 45 grados tomando una foto
 		//hasta encontrar la bandera
   }
+=======
+>>>>>>> 0df9ff9d2f9a2ff03122af899f83db18eb9c3ea2
   imshow("Thresholded Image", imgThreshold); //show the thresholded image
   waitKey();
   cout << finalPos.x << ", " << finalPos.y << endl;
