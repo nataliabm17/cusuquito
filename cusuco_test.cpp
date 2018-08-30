@@ -1,84 +1,166 @@
-#include <opencv2/imgcodecs.hpp>
-#include <opencv2/highgui.hpp>
-#include <opencv2/imgproc.hpp>
+// ROS includes
+#include <ros/ros.h>
+#include <sensor_msgs/image_encodings.h>
+
+// CvBridge imports
+#include <image_transport/image_transport.h>
+#include <cv_bridge/cv_bridge.h>
+
+// OpenCV imports
+#include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/core/core.hpp>
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/imgcodecs.hpp>
 #include <opencv2/opencv.hpp>
 #include <opencv2/core/utility.hpp>
-using namespace cv;
-#include <dirent.h>   //Used in the program to read files in the directory
+
+// C++ includes
 #include <fstream>
 #include <iostream>
 #include <iomanip>
-#include <cmath>
-#include <cstdlib>
-#include <cstring>
-#include <tiffio.h>
 #include <stdexcept>
 #include <vector>
 #include <string>
+#include <cstdio>
+#include <cmath>
+
+using namespace cv;
 using namespace std;
 
 Mat HistogramMap(Mat image);
 Mat claheEqualization(Mat input);
 Mat LogFilter(Mat input), Exponential(Mat input);
 Mat medianBlurFilter(Mat input);
-Mat dilationOperation(Mat input), erosionOperation(Mat input);
 Mat bilatFilter(Mat input);
 Mat adaptiveThreshold(Mat input);
 vector<Point2f> DetectedObjects(Mat input);
-Mat findingContours(Mat input);
 int addfiles(string dir, vector<string> &files);
 Mat sobelFilter(Mat input);
+Point2f colorDetection(Mat input);
+Point2f coord;
+
+#define PI 3.141592653589
+
+void FunctionToHandlePublishedImage(const sensor_msgs::ImageConstPtr& msg);
+
+image_transport::Subscriber sub_ourImageTopic_;
+cv_bridge::CvImagePtr cv_ptr;
+cv_bridge::CvImagePtr cv_ptr_display;
+
+//namespace enc = sensor_msgs::image_encodings;
+int contadorDeImagenesRecibidas=0;
 
 
 main(int argc, char** argv){
-  Mat originalHistogram, EqHistogram; //Histograms of readImage and after equalization
-  Mat claheEquaIm;         //Original and equalized images
-  Mat expoIm, bilatFilterIm, LogFilterIm, dilateIm, erodeIm, medianBlurIm; //mat objects for applied filters
-  Mat adapThresholdIm;             //thresholding techniques applied
-  Mat PatternIm, adapContoursIm; //mat objects for identification in images
-  Mat sobelFiltIm;
-  //Reading images' directory and its content
-  string dir;
-  if(argc > 1){
-    dir = argv[1];
-  }
-  vector<Mat> originalIms;                  //Mat vector to store the images
-  vector<Mat> segIms;                     //Mat vector to store segmented images
-  vector<string> files = vector<string>(); //Vector where the files' names are kept
-  addfiles(dir,files);
 
-  //Obtaining Mat array with the original images
-  for(int i = 0; i<files.size();i++){
-    //show images' paths, read them all and get them into a Mat vector
-    //push_back adds new elements at the end of the vector
-    originalIms.push_back(imread(files[i], IMREAD_COLOR));
-  }
+    //Levantando del nodo ROS llamado "image_segmentation_node".
+    ros::init(argc, argv, "image_segmentation_node");
+    ros::NodeHandle nh_;
 
-  for(int i = 0; i< originalIms.size();i++){
-    //find the histogram for each image
-    //HistogramMap(originalIms[i]).copyTo(EqHistogram);
+    //Dandole al nodo la capacidad de recepcion de
+    //mensajes con imagenes
+    image_transport::ImageTransport it_(nh_);
 
-    //Applying CLAHE equalization to each image
-    claheEqualization(originalIms[i]).copyTo(claheEquaIm);
+    //Subscripción al topico "/usb_cam/image_raw", a traves del cual
+    //se recibiran las imagenes capturadas por la camara usb de su
+    //laptop. Se define un buffer de entrada de máximo 1 imágenes
+    sub_ourImageTopic_ = it_.subscribe("/usb_cam/image_raw", 1, FunctionToHandlePublishedImage);
+    //La función geoFunctionToHandlePublishedImage se ejecutara cada vez
+    //que un mensaje se reciba a través del tópico "/usb_cam/image_raw".
 
-    //Histogram obtained after CLAHE equalization
-    //HistogramMap(claheEquaIm).copyTo(EqHistogram);
+    //Creando ventanas OpenCV para desplegar imagenes
+    //windowName0 = "Imagen de Intensidad";
+    //windowName1 = "Imagen Segmentada";
+	//printf("No me pegué ");
+    cvWaitKey(30); //Esta funcion ademas de hacer esperar al
+    //programa 30 ms, tambien fuerza a OpenCv a crear
+    //inmediatamente las ventanas
 
-    //sobelFilter(claheEquaIm).copyTo(sobelFiltIm);
+    //El valor de X en la función ros::Rate loop_rate(X)
+    //indica el número de ciclos "while (ros::ok())" que ROS
+    //deberá realizar por segundo aproximadamente. Esta función
+    //trabaja en forma conjunta con la función loop_rate.sleep()
+    ros::Rate loop_rate(30);
 
-    adaptiveThreshold(claheEquaIm).copyTo(adapThresholdIm);
-    //Applying median blur after adaptive thresholding to remove black and white small noise
-    //medianBlurFilter(adapThresholdIm).copyTo(medianBlurIm);
-    //Opening operation to remove additional noise
-    //erosionOperation(medianBlurIm).copyTo(erodeIm);
-    //dilationOperation(erodeIm).copyTo(dilateIm);
+    //ros::ok() es cero cuando ctrl+c es presionado en el teclado.
+    //Utilice esa combinación de teclas para salirse del programa.
+    while (ros::ok()){
+         //Dentro de la funcion "ros::spinOnce()" ROS ejecuta
+         //sus funciones. Los mensajes se atenderán solamente
+         //dentro de "ros::spinOnce()".
+         ros::spinOnce();
+         loop_rate.sleep();
+	}
 
+    return 0;
+}
+
+void FunctionToHandlePublishedImage(const sensor_msgs::ImageConstPtr& msg){
+	Mat claheEquaIm;         //Original and equalized images
+	Mat adapThresholdIm;             //thresholding techniques applied
+
+    //Extrayendo la imagen rgb del mensaje recibido
+//printf(" No me pegué x2 ");
+    try{
+      //cv_prt es un puntero a una estructura ROS que
+      //contiene un puntero a otra estructura OpenCV que
+      //a su vez contiene un puntero a la imagen rgb
+      //recibida.
+	  Mat im1;
+	  Mat im2;
+      cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
+	  //cv_ptr =toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
+
+      //cv_prt_display es una copia de cv_prt. Esta copia
+      //se usará únicamente para visualización
+      cv_ptr_display = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
+
+		im1=cv_ptr->image;
+		im2=cv_ptr_display->image;
+
+ 		//HistogramMap(originalIms[i]).copyTo(EqHistogram);
+    	//Applying CLAHE equalization to each image
+    	claheEqualization(im2).copyTo(im2);
+
+	    //Histogram obtained after CLAHE equalization
+    	//HistogramMap(claheEquaIm).copyTo(EqHistogram);
+    	//adaptiveThreshold(claheEquaIm).copyTo(adapThresholdIm)
+
+    	coord = colorDetection(im2);
+
+		  result = coord.x - center;
+    if(result > 0){
+      //Object to the right
+      result = abs(result);           //distance the car should move to one side or the other
+      result = angle(result);         //angle the car should move to the right
+      //Send message to move left motor RESULT angles to move to the right
+
+    }else if(result < 0){
+      //Object to the left
+      result = abs(result);
+      result = angle(result)*-1;        //angle the car should move to the left
+      //Send message to move right motor RESULT angles to move to the left
+    }else{                          //Object = Result
+      //Send message to keep moving with both motors working ======> Envia 0,0 (cero de direccion, cero de angulo)
+    }
+    	imshow("Coordinates", claheEquaIm); //show the thresholded image
+    	waitKey();
+    	destroyWindow("Coordinates");
+    	//equalizeHist(im2,im2);
+    	//namedWindow("Equalized image", WINDOW_AUTOSIZE);
+    	//imshow("Equalized image",im2);
+    	//cvWaitKey(30);
+		
 
     }
+    catch (cv_bridge::Exception& e){
+      ROS_ERROR("lalalalalalalcv_bridge exception: %s", e.what());
+      return;
+    }
 
-  return 0;
+    contadorDeImagenesRecibidas++;
 }
+
 
 //Function for directory reading and image retreiving
 int addfiles(string dir, vector<string> &files){   //receives the directory and a vector the dir's files
@@ -100,7 +182,7 @@ int addfiles(string dir, vector<string> &files){   //receives the directory and 
   return 0;
 }
 
-//image processing functions to make the cells in the image readable
+
 Mat claheEqualization(Mat input){
   if(input.empty()){
     cout << "Image: not found" << endl;
@@ -115,13 +197,14 @@ Mat claheEqualization(Mat input){
   output.copyTo(sections[0]);
   merge(sections,labImage);
   cv::cvtColor(labImage, equalizedIm, CV_Lab2BGR);
-  cv::cvtColor(equalizedIm, equalizedIm, CV_BGR2GRAY);
+  //cv::cvtColor(equalizedIm, equalizedIm, CV_BGR2HSV);
   namedWindow("CLAHEqualized Image", WINDOW_AUTOSIZE);
   imshow("CLAHEqualized Image",equalizedIm);
   waitKey();
   destroyWindow("CLAHEqualized Image");
   return equalizedIm;
 }
+
 
 Mat HistogramMap(Mat image){
   int hist_w = 512;
@@ -161,6 +244,7 @@ Mat HistogramMap(Mat image){
   return histImage;
 }
 
+
 Mat sobelFilter(Mat input){
   Mat output;
   int scale = 1;
@@ -179,17 +263,22 @@ Mat sobelFilter(Mat input){
   return output;
 }
 
+
 Point2f colorDetection(Mat input){
   Mat output;
-  int LowH, HighH, LowS, HighS, LowV, HighV;
-  Mat imgHSV, imgThreshold;
+  int LowB, HighB, LowG, HighG, LowR, HighR;
+  LowB, LowG = 0;
+  HighB = 190;
+  HighG = 155;
+  LowR = 92;
+  HighR = 255;
+  Mat imgThreshold;
   int iLastX = -1;
   int iLastY = -1;
-  Mat imgLines = Mat::zeros(input.size(), CV_8UC3 );
+  Mat imgLines = Mat::zeros(input.size(), CV_8UC3);
   Point2f finalPos;
 
-  cvtColor(input,imgHSV,COLOR_BGR2HSV);
-  inRange(imgHSV,Scalar(LowH,LowS,LowV),Scalar(HighH,HighS,HighV),imgThreshold);
+  inRange(input,Scalar(LowB,LowG,LowR),Scalar(HighB,HighG,HighR),imgThreshold);
 
   //morphological opening (removes small objects from the foreground)
   erode(imgThreshold, imgThreshold, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)) );
@@ -201,14 +290,11 @@ Point2f colorDetection(Mat input){
 
   //Calculate the moments of the thresholded image
   Moments oMoments = moments(imgThreshold);
-
   double dM01 = oMoments.m01;
   double dM10 = oMoments.m10;
   double dArea = oMoments.m00;
-
-    // if the area <= 10000, I consider that there are no object in the image and it's because of the noise, the area is not zero
-
-    //************HACER PRUEBAS CON LA BANDERA CON LA DISTANCIA DE 13 METROS*************
+  // if the area <= 10000, I consider that there are no object in the image and it's because of the noise, the area is not zero
+  //************HACER PRUEBAS CON LA BANDERA CON LA DISTANCIA DE 13 METROS*************
   if (dArea > 10000)
   {
     //calculate the position of the ball
@@ -216,8 +302,13 @@ Point2f colorDetection(Mat input){
     finalPos.y = dM01 / dArea;
   }
 
-  imshow("Thresholded Image", imgThresholded); //show the thresholded image
-  waitKey(30);
+  if(finalPos.x == 0 && finalPos.y == 0){
+        //Manda msj de 'NO ENCUENTRA BANDERA': gira cada 45 grados tomando una foto
+		//hasta encontrar la bandera
+  }
+  imshow("Thresholded Image", imgThreshold); //show the thresholded image
+  waitKey();
+  cout << finalPos.x << ", " << finalPos.y << endl;
   return finalPos;
 }
 
@@ -238,31 +329,12 @@ Mat medianBlurFilter(Mat input){
   destroyWindow("median Blur");
   return output;
 }
-Mat erosionOperation(Mat input){  //add //a little bit more useful //darkens
-  Mat output;
-  float erosion_size=1.78;
-  Mat element = getStructuringElement(cv::MORPH_CROSS, cv::Size(2*(erosion_size + 0.3), 2*(erosion_size + 0.3)), cv::Point(erosion_size, erosion_size));
-  erode(input,output, element);
-  namedWindow("Erosion result", WINDOW_AUTOSIZE);
-  imshow("Erosion result", output);
-  waitKey();
-  destroyWindow("Erosion result");
-  return output;
-}
-Mat dilationOperation(Mat input){ //substract  //not useful in these case //brightens
-  Mat output;
-  float dilation_size=0.938;
-  Mat element = getStructuringElement(cv::MORPH_CROSS, cv::Size(2*dilation_size - 0.3,2*dilation_size - 0.3), cv::Point(dilation_size, dilation_size));
-  dilate(input,output, element);
-  Mat kernel = (Mat_<float>(3,3) << 1,1,1,1,-8,1,1,1,1); //approximation of second derivative
-  Mat LaplacianIm, resultIm;
-  Mat edgeIm = output;
-  filter2D(edgeIm,LaplacianIm,CV_32F,kernel);
-  cv::subtract(edgeIm, LaplacianIm, output, Mat(), CV_32F);
-  output.convertTo(output,CV_8UC1);
-  namedWindow("Dilation result", WINDOW_AUTOSIZE);
-  imshow("Dilation result", output);
-  waitKey();
-  destroyWindow("Dilation result");
-  return output;
+
+float angle(float distance){
+  float output;
+  float hfov = (54.61*(PI/180));       //angulo de hfov en radianes
+  float b = 1280;                      //pixeles totales en micrometros
+  float cita = hfov/2;
+  output = (atan((2*distance*tan(cita*(PI/180.0)))/b)*180/PI);
+  return output;                       //returns angle from center of the camera to one side or the other
 }
