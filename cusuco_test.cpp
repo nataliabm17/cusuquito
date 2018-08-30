@@ -31,7 +31,9 @@ int addfiles(string dir, vector<string> &files);
 Mat sobelFilter(Mat input);
 Point2f colorDetection(Mat input);
 Point2f coord;
+float angle(float distance);
 
+#define PI 3.141592653589
 
 main(int argc, char** argv){
   Mat originalHistogram, EqHistogram; //Histograms of readImage and after equalization
@@ -40,6 +42,8 @@ main(int argc, char** argv){
   Mat adapThresholdIm;             //thresholding techniques applied
   Mat PatternIm, adapContoursIm; //mat objects for identification in images
   Mat sobelFiltIm;
+  float center = 640;
+  float result;
   //Reading images' directory and its content
   string dir;
   if(argc > 1){
@@ -50,7 +54,6 @@ main(int argc, char** argv){
   vector<string> files = vector<string>(); //Vector where the files' names are kept
   vector<Point2f> coordinates;
   addfiles(dir,files);
-  Mat outp;
 
   //Obtaining Mat array with the original images
   for(int i = 0; i<files.size();i++){
@@ -73,28 +76,39 @@ main(int argc, char** argv){
 
 
     coord = colorDetection(claheEquaIm);
-  /*  for(int i=coord.x-50;i<coord.x+50;i++){
-      for(int j=coord.y-50;i<coord.y+50;j++){
-        Vec3b color = image.at<Vec3b>(Point(i,j));
-        image.at<Vec3b>(Point(i,j)) = color;
-
-        //claheEquaIm.at<Vec3b>(j,i)=Vec3b(Point(0,0,255));
-      }
-
+    /*for(int i=coord.x-50;i<coord.x+50;i++){
+        for(int j=coord.y-50;i<coord.y+50;j++){
+          Vec3b color = image.at<Vec3b>(Point(i,j));
+          image.at<Vec3b>(Point(i,j)) = color;
+          //claheEquaIm.at<Vec3b>(j,i)=Vec3b(Point(0,0,255));
+        }
     }*/
 
+    //Comparacion de coordenada x con posicion del centro
+    result = coord.x - center;
+    if(result > 0){
+      //Object to the right
+      result = abs(result);           //distance the car should move to one side or the other
+      result = angle(result);         //angle the car should move to the right
+      //Send message to move left motor RESULT angles to move to the right
 
+    }else if(result < 0){
+      //Object to the left
+      result = abs(result);
+      result = angle(result);        //angle the car should move to the left
+      //Send message to move right motor RESULT angles to move to the left
+    }else{                          //Object = Result
+      //Send message to keep moving with both motors working ======> Envia 0,0 (cero de direccion, cero de angulo)
+    }
     imshow("Coordinates", claheEquaIm); //show the thresholded image
     waitKey();
     destroyWindow("Coordinates");
-    //Mat imgLines = Mat::zeros(input.size(), CV_8UC3);
-
 
   }
-
-
   return 0;
 }
+
+
 
 //Function for directory reading and image retreiving
 int addfiles(string dir, vector<string> &files){   //receives the directory and a vector the dir's files
@@ -254,4 +268,13 @@ Mat medianBlurFilter(Mat input){
   waitKey();
   destroyWindow("median Blur");
   return output;
+}
+
+float angle(float distance){
+  float output;
+  float hfov = (54.61*(PI/180));       //angulo de hfov en radianes
+  float b = 1280;                      //pixeles totales en micrometros
+  float cita = hfov/2;
+  output = (atan((2*distance*tan(cita*(PI/180.0)))/b)*180/PI);
+  return output;                       //returns angle from center of the camera to one side or the other
 }
