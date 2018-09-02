@@ -1,0 +1,8 @@
+areaFinal 900000
+areaDetect 10000
+lowB 0
+lowG 0
+lowR 92
+highB 190
+highG 155
+highR 255
